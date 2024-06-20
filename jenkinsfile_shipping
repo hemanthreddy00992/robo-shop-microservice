@@ -1,0 +1,97 @@
+pipeline {
+    agent any
+    tools {
+        jdk 'jdk17'
+        maven 'maven3'
+    }
+    
+    environment {
+        SCANNER_HOME = tool 'sonar-scanner'
+    }
+
+    stages {
+        stage('Git checkout') {
+            steps {
+                git branch: 'main', url: 'https://github.com/hemanthreddy00992/robo-shop-microservice.git'
+            }
+        }
+        
+        
+        stage('code compile') {
+            steps {
+                dir('shipping') {
+                   sh 'mvn compile'
+                }
+            }
+        }
+         
+        
+        stage('Trivy Filesystem Scan') {
+            steps {
+                script {
+                    dir('shipping'){
+                    // Run the Trivy scan
+                    sh "trivy fs . --format json --output trivy-results.json"
+                    archiveArtifacts artifacts: '--output trivy-results.json', allowEmptyArchive: true
+                    }
+                }
+            }
+        }
+        
+        stage('Sonarqube analsys') {
+            steps {
+                dir('shipping') {
+                  withSonarQubeEnv('sonar') {
+                    sh ''' $SCANNER_HOME/bin/sonar-scanner -Dsonar.projectKey=shipping -Dsonar.project=shipping\
+                    -Dsonar.java.binaries=. '''
+                        }
+                }
+            }
+        }
+        
+        stage('code build') {
+            steps {
+                dir('shipping') {
+                  sh 'mvn package'
+                }
+            }
+        } 
+        
+        stage('Docker build and tag') {
+            steps {
+                script {
+                dir('shipping') {
+                  withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
+                        sh 'docker build -t hemanthreddy00992/shipping-microservice:latest .'
+                    }
+                }
+                }
+            }
+        }
+        
+        stage('image scan') {
+            steps {
+                dir('shipping') {
+                 sh 'trivy image --format table -o trivy-image-report.html hemanthreddy00992/shipping-microservice:latest'
+                }
+                
+            }
+        }
+         
+         
+        stage('Docker push') {
+            steps {
+                script {
+                dir('shipping') {
+                  withDockerRegistry(credentialsId: 'docker-cred', toolName: 'docker') {
+                        sh 'docker push -t hemanthreddy00992/shipping-microservice:latest '
+                    }
+                }
+                }
+            }
+        }
+        
+    
+        
+    }
+}
