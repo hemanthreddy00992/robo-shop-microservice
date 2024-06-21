@@ -1,15 +1,16 @@
 #
 # Build
 #
-FROM debian:10 AS build
-
-RUN apt-get update && apt-get -y install maven
+FROM maven:3.6.3-jdk-11 AS build
 
 WORKDIR /opt/shipping
 
-COPY pom.xml /opt/shipping/
+# Copy the pom.xml and resolve dependencies
+COPY pom.xml .
 RUN mvn dependency:resolve
-COPY src /opt/shipping/src/
+
+# Copy the source code and package the application
+COPY src ./src
 RUN mvn package
 
 #
@@ -26,5 +27,5 @@ ENV DB_HOST=mysql
 
 COPY --from=build /opt/shipping/target/shipping-1.0.jar shipping.jar
 
-CMD [ "java", "-Xmn256m", "-Xmx768m", "-jar", "shipping.jar" ]
+CMD ["java", "-Xmn256m", "-Xmx768m", "-jar", "shipping.jar"]
 
